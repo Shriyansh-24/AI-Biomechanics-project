@@ -1,0 +1,1 @@
+Encountered and resolved an AttributeError by managing environment dependencies. Chose to utilize MediaPipe 0.10.14 to maintain compatibility with legacy Pose-estimation architectures while evaluating the migration path to the MediaPipe Tasks API.
