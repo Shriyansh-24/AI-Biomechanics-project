@@ -23,9 +23,12 @@ from mediapipe.tasks.python import vision as mp_vision
 # ============================================================
 
 MODEL_PATH          = "pose_landmarker_heavy.task"
-CSV_FILENAME        = "injury_prevention_data.csv"
-SCREENSHOTS_DIR     = "risk_screenshots"
-REPORT_FILE         = os.path.join(SCREENSHOTS_DIR, "risk_report.txt")
+# OLD — replace these two lines
+# NEW — each session gets its own timestamped folder
+_SESSION_TS      = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+SCREENSHOTS_DIR  = os.path.join("risk_screenshots", f"session_{_SESSION_TS}")
+REPORT_FILE      = os.path.join(SCREENSHOTS_DIR, "risk_report.txt")
+CSV_FILENAME = f"session_{_SESSION_TS}_data.csv"
 
 AUTO_SAVE_INTERVAL  = 30      # save to CSV every N frames
 COUNTDOWN_SECONDS   = 5       # seconds before manual save
@@ -50,11 +53,6 @@ mp_pose_connections = mp.solutions.pose.POSE_CONNECTIONS
 # ============================================================
 
 os.makedirs(SCREENSHOTS_DIR, exist_ok=True)
-
-if os.path.exists(CSV_FILENAME):
-    os.remove(CSV_FILENAME)
-if os.path.exists(REPORT_FILE):
-    os.remove(REPORT_FILE)
 
 # ============================================================
 # SECTION 3: BIOMECHANICS MATH
@@ -112,12 +110,17 @@ def detect_orientation(landmarks, front_threshold=0.15):
 # SECTION 4: INJURY RISK DETECTION
 # ============================================================
 
-def detect_all_risks(landmarks, right_angle, left_angle, orientation="UNKNOWN"):
+def detect_all_risks(landmarks, right_angle, left_angle,
+                     orientation="UNKNOWN", is_squatting=False):
     """
     orientation controls which checks are active:
       FRONT → valgus + asymmetry ON,  shallow/hyperextension ON
       SIDE  → valgus + asymmetry OFF, shallow/hyperextension ON
       UNKNOWN → same as SIDE (safe default)
+
+    is_squatting: True only when RepCounter state is SQUATTING or RISING.
+      Depth and hyperextension checks only make sense mid-squat.
+      When standing still, a 170 degree angle is normal — not a problem.
     """
     problems = []
 
@@ -181,40 +184,49 @@ def detect_all_risks(landmarks, right_angle, left_angle, orientation="UNKNOWN"):
                 "knee_side":  "Both"
             })
 
-    # Check 3: Shallow Squat
-    for side, angle in [("Right", right_angle), ("Left", left_angle)]:
-        if angle is not None and angle > SHALLOW_THRESHOLD:
-            problems.append({
-                "type":        f"Shallow Squat ({side})",
-                "severity":    "MEDIUM",
-                "explanation": (
-                    f"{side} knee at {angle} — too shallow. "
-                    f"Overloads the knee cap and reduces glute activation."
-                ),
-                "fix": (
-                    f"Work on ankle and hip mobility. "
-                    f"Try heel-elevated squats to build depth."
-                ),
-                "color_bgr": (0, 200, 255),
-                "knee_side":  side
-            })
+    # Check 3: Shallow Squat — ONLY DURING SQUAT MOVEMENT
+    # A standing person always has a high knee angle (~170°).
+    # Flagging this as "too shallow" when they haven't started
+    # squatting yet is a false positive. Only check depth when
+    # the rep counter confirms a squat is actually in progress.
+    if is_squatting:
+        for side, angle in [("Right", right_angle), ("Left", left_angle)]:
+            if angle is not None and angle > SHALLOW_THRESHOLD:
+                problems.append({
+                    "type":        f"Shallow Squat ({side})",
+                    "severity":    "MEDIUM",
+                    "explanation": (
+                        f"{side} knee at {angle} degrees — too shallow. "
+                        f"Overloads the knee cap and reduces glute activation."
+                    ),
+                    "fix": (
+                        f"Work on ankle and hip mobility. "
+                        f"Try heel-elevated squats to build depth."
+                    ),
+                    "color_bgr": (0, 200, 255),
+                    "knee_side":  side
+                })
 
-    # Check 4: Hyperextension
-    for side, angle in [("Right", right_angle), ("Left", left_angle)]:
-        if angle is not None and angle > 175:
-            problems.append({
-                "type":        f"Hyperextension Risk ({side})",
-                "severity":    "HIGH",
-                "explanation": (
-                    f"{side} knee at {angle} — near full lock-out under load. "
-                    f"Stresses the PCL ligament and posterior capsule."
-                ),
-                "fix": (
-                    f"Keep a soft 5-10 degree bend at the top of every rep."
-                ),
-                "color_bgr": (0, 0, 220),
-                "knee_side":  side
-            })
+    # Check 4: Hyperextension — ONLY DURING SQUAT MOVEMENT
+    # Hyperextension is only a risk when the knee is under load
+    # during a movement. Standing relaxed with straight legs is
+    # completely normal and should not be flagged.
+    if is_squatting:
+        for side, angle in [("Right", right_angle), ("Left", left_angle)]:
+            if angle is not None and angle > 175:
+                problems.append({
+                    "type":        f"Hyperextension Risk ({side})",
+                    "severity":    "HIGH",
+                    "explanation": (
+                        f"{side} knee at {angle} degrees — near full lock-out under load. "
+                        f"Stresses the PCL ligament and posterior capsule."
+                    ),
+                    "fix": (
+                        f"Keep a soft 5-10 degree bend at the top of every rep."
+                    ),
+                    "color_bgr": (0, 0, 220),
+                    "knee_side":  side
+                })
 
     return problems
 
@@ -548,7 +560,12 @@ def main():
             # Detect which way athlete is facing THIS frame
             orientation, shoulder_gap = detect_orientation(lms)
 
-            problems    = detect_all_risks(lms, right_angle, left_angle, orientation)
+            # True when either leg is mid-squat (SQUATTING or RISING state)
+            is_squatting = (right_ctr.state in ("SQUATTING", "RISING") or
+                            left_ctr.state  in ("SQUATTING", "RISING"))
+
+            problems    = detect_all_risks(lms, right_angle, left_angle,
+                                           orientation, is_squatting)
             risk_score  = calculate_risk_score(problems)
 
             # Valgus only meaningful from front view
@@ -566,8 +583,10 @@ def main():
             r_fatigue, _ = detect_fatigue(right_ctr.rep_depths)
             l_fatigue, _ = detect_fatigue(left_ctr.rep_depths)
 
-            r_risk = calculate_risk_score(detect_all_risks(lms, right_angle, None, orientation))
-            l_risk = calculate_risk_score(detect_all_risks(lms, None, left_angle, orientation))
+            r_risk = calculate_risk_score(detect_all_risks(lms, right_angle, None,
+                                                            orientation, is_squatting))
+            l_risk = calculate_risk_score(detect_all_risks(lms, None, left_angle,
+                                                            orientation, is_squatting))
 
             # Draw skeleton on live frame
             lp = landmark_pb2.NormalizedLandmarkList()
