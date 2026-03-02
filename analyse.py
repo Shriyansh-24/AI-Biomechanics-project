@@ -14,7 +14,15 @@ from matplotlib.patches import FancyBboxPatch
 import warnings
 warnings.filterwarnings('ignore')
 
-CSV_FILE    = "injury_prevention_data.csv"
+import glob
+
+# NEW — automatically finds the most recent session CSV
+csv_files = sorted(glob.glob("session_*_data.csv"))
+if not csv_files:
+    print("ERROR: No session data found. Run motion_capture.py first.")
+    exit()
+CSV_FILE = csv_files[-1]   # most recent session
+print(f"[LOADING] Using most recent session: {CSV_FILE}")
 OUTPUT_IMG  = "biomechanics_report.png"
 
 # ============================================================

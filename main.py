@@ -23,12 +23,9 @@ from mediapipe.tasks.python import vision as mp_vision
 # ============================================================
 
 MODEL_PATH          = "pose_landmarker_heavy.task"
-# OLD — replace these two lines
-# NEW — each session gets its own timestamped folder
-_SESSION_TS      = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-SCREENSHOTS_DIR  = os.path.join("risk_screenshots", f"session_{_SESSION_TS}")
-REPORT_FILE      = os.path.join(SCREENSHOTS_DIR, "risk_report.txt")
-CSV_FILENAME = f"session_{_SESSION_TS}_data.csv"
+CSV_FILENAME        = "injury_prevention_data.csv"
+SCREENSHOTS_DIR     = "risk_screenshots"
+REPORT_FILE         = os.path.join(SCREENSHOTS_DIR, "risk_report.txt")
 
 AUTO_SAVE_INTERVAL  = 30      # save to CSV every N frames
 COUNTDOWN_SECONDS   = 5       # seconds before manual save
@@ -53,6 +50,11 @@ mp_pose_connections = mp.solutions.pose.POSE_CONNECTIONS
 # ============================================================
 
 os.makedirs(SCREENSHOTS_DIR, exist_ok=True)
+
+if os.path.exists(CSV_FILENAME):
+    os.remove(CSV_FILENAME)
+if os.path.exists(REPORT_FILE):
+    os.remove(REPORT_FILE)
 
 # ============================================================
 # SECTION 3: BIOMECHANICS MATH
@@ -235,12 +237,29 @@ def calculate_risk_score(problems):
     score = sum({"HIGH": 40, "MEDIUM": 20}.get(p["severity"], 10) for p in problems)
     return min(score, 100)
 
+def detect_knee_alignment(hip, knee, ankle, side="Left"):
+    """
+    Detects both valgus (inward) and varus (outward) knee deviation.
+    Mirror-aware — accounts for flipped webcam x-axis.
 
-def detect_knee_valgus(hip, knee, ankle):
+    Right knee valgus = deviation positive  (moves toward body centre in mirror)
+    Right knee varus  = deviation negative  (moves away from body centre)
+    Left knee valgus  = deviation negative  (moves toward body centre)
+    Left knee varus   = deviation positive  (moves away from body centre)
+
+    Returns: (valgus: bool, varus: bool, deviation: float)
+    """
     ideal_x   = (hip[0] + ankle[0]) / 2.0
     deviation = knee[0] - ideal_x
-    return deviation < -VALGUS_THRESHOLD, round(deviation, 4)
 
+    if side == "Right":
+        valgus = deviation >  VALGUS_THRESHOLD
+        varus  = deviation < -VALGUS_THRESHOLD
+    else:
+        valgus = deviation < -VALGUS_THRESHOLD
+        varus  = deviation >  VALGUS_THRESHOLD
+
+    return valgus, varus, round(deviation, 4)
 
 def detect_asymmetry(right_angle, left_angle):
     if right_angle is None or left_angle is None:
@@ -369,7 +388,7 @@ def save_risk_screenshot(annotated_img, problems, risk_score,
 # SECTION 7: LIVE FEEDBACK
 # ============================================================
 
-def generate_live_feedback(angle, valgus, asym, asym_val, fatigued, risk):
+def generate_live_feedback(angle, valgus, varus, asym, asym_val, fatigued, risk):
     fb = []
     if angle is not None:
         if   angle < 70:  fb.append(("DEPTH: Excellent",     (0,255,0)))
@@ -377,7 +396,9 @@ def generate_live_feedback(angle, valgus, asym, asym_val, fatigued, risk):
         elif angle < 130: fb.append(("DEPTH: Shallow",       (0,165,255)))
         else:             fb.append(("DEPTH: Too shallow",   (0,0,255)))
     if valgus:
-        fb.append(("! KNEE CAVING INWARD",                   (0,0,255)))
+        fb.append(("! KNEE CAVING INWARD (VALGUS)",          (0,0,255)))
+    if varus:
+        fb.append(("! KNEE PUSHING OUTWARD (VARUS)",         (255,100,0)))
     if asym and asym_val:
         fb.append((f"! ASYMMETRY: {asym_val} deg",           (0,0,255)))
     if fatigued:
@@ -392,13 +413,21 @@ def generate_live_feedback(angle, valgus, asym, asym_val, fatigued, risk):
 
 def save_to_csv(frame_number, timestamp, side,
                 hip_c, knee_c, ankle_c, angle,
-                valgus, asym_val, fatigued, risk, rep):
+                valgus, varus, asym_val, fatigued, risk, rep):
+    """
+    Saves one row of biomechanical data to the session CSV.
+    Columns:
+      knee_valgus  — TRUE if knee collapsed inward  (ACL risk)
+      knee_varus   — TRUE if knee pushed too far out (LCL/IT band risk)
+    Both are saved so the full frontal plane deviation is recorded.
+    """
     file_exists = os.path.isfile(CSV_FILENAME)
     with open(CSV_FILENAME, mode='a', newline='') as f:
         fields = ['frame','timestamp_s','rep_number','side',
                   'hip_x','hip_y','hip_z','knee_x','knee_y','knee_z',
                   'ankle_x','ankle_y','ankle_z','knee_angle_deg',
-                  'knee_valgus','asymmetry_deg','fatigue_detected',
+                  'knee_valgus','knee_varus',
+                  'asymmetry_deg','fatigue_detected',
                   'risk_score_0_to_100']
         writer = csv.DictWriter(f, fieldnames=fields)
         if not file_exists:
@@ -409,9 +438,12 @@ def save_to_csv(frame_number, timestamp, side,
             'hip_x': hip_c[0],    'hip_y': hip_c[1],    'hip_z': hip_c[2],
             'knee_x': knee_c[0],  'knee_y': knee_c[1],  'knee_z': knee_c[2],
             'ankle_x': ankle_c[0],'ankle_y': ankle_c[1],'ankle_z': ankle_c[2],
-            'knee_angle_deg': angle, 'knee_valgus': valgus,
+            'knee_angle_deg': angle,
+            'knee_valgus': valgus,
+            'knee_varus':  varus,
             'asymmetry_deg': asym_val if asym_val else 'N/A',
-            'fatigue_detected': fatigued, 'risk_score_0_to_100': risk
+            'fatigue_detected': fatigued,
+            'risk_score_0_to_100': risk
         })
 
 # ============================================================
@@ -530,7 +562,8 @@ def main():
         right_angle = left_angle  = None
         problems    = []
         risk_score  = 0
-        valgus_r = valgus_l = asym_flag = False
+        valgus_r = valgus_l = varus_r = varus_l = False
+        asym_flag = False
         asym_val = None
         r_fatigue = l_fatigue = False
         r_hip_c = r_knee_c = r_ankle_c = None
@@ -568,12 +601,12 @@ def main():
                                            orientation, is_squatting)
             risk_score  = calculate_risk_score(problems)
 
-            # Valgus only meaningful from front view
+            # Valgus + varus only meaningful from front view
             if orientation == "FRONT":
-                valgus_r, _ = detect_knee_valgus(r_hip_c, r_knee_c, r_ankle_c)
-                valgus_l, _ = detect_knee_valgus(l_hip_c, l_knee_c, l_ankle_c)
+                valgus_r, varus_r, _ = detect_knee_alignment(r_hip_c, r_knee_c, r_ankle_c, side="Right")
+                valgus_l, varus_l, _ = detect_knee_alignment(l_hip_c, l_knee_c, l_ankle_c, side="Left")
             else:
-                valgus_r = valgus_l = False
+                valgus_r = valgus_l = varus_r = varus_l = False
 
             # Asymmetry only meaningful from front view
             if orientation == "FRONT":
@@ -620,10 +653,11 @@ def main():
                         cv2.FONT_HERSHEY_SIMPLEX, 0.52, orient_color, 1, cv2.LINE_AA)
 
             # Feedback panel
-            dom_ang = right_angle if r_risk>=l_risk else left_angle
-            dom_v   = valgus_r    if r_risk>=l_risk else valgus_l
-            dom_fat = r_fatigue   if r_risk>=l_risk else l_fatigue
-            fb = generate_live_feedback(dom_ang, dom_v, asym_flag, asym_val,
+            dom_ang  = right_angle if r_risk>=l_risk else left_angle
+            dom_v    = valgus_r    if r_risk>=l_risk else valgus_l
+            dom_vr   = varus_r     if r_risk>=l_risk else varus_l
+            dom_fat  = r_fatigue   if r_risk>=l_risk else l_fatigue
+            fb = generate_live_feedback(dom_ang, dom_v, dom_vr, asym_flag, asym_val,
                                          dom_fat, risk_score)
             ov = frame.copy()
             cv2.rectangle(ov, (4,50), (300, 56+len(fb)*32), (0,0,0), -1)
@@ -651,12 +685,12 @@ def main():
                 if right_angle and r_hip_c:
                     save_to_csv(frame_count, elapsed, "RIGHT",
                                 r_hip_c, r_knee_c, r_ankle_c,
-                                right_angle, valgus_r, asym_val,
+                                right_angle, valgus_r, varus_r, asym_val,
                                 r_fatigue, r_risk, right_ctr.rep_count)
                 if left_angle and l_hip_c:
                     save_to_csv(frame_count, elapsed, "LEFT",
                                 l_hip_c, l_knee_c, l_ankle_c,
-                                left_angle, valgus_l, asym_val,
+                                left_angle, valgus_l, varus_l, asym_val,
                                 l_fatigue, l_risk, left_ctr.rep_count)
 
         # HUD
@@ -685,12 +719,12 @@ def main():
                 if right_angle and r_hip_c:
                     save_to_csv(frame_count, elapsed,"RIGHT_MANUAL",
                                 r_hip_c,r_knee_c,r_ankle_c,
-                                right_angle,valgus_r,asym_val,
+                                right_angle,valgus_r,varus_r,asym_val,
                                 r_fatigue,r_risk,right_ctr.rep_count)
                 if left_angle and l_hip_c:
                     save_to_csv(frame_count,elapsed,"LEFT_MANUAL",
                                 l_hip_c,l_knee_c,l_ankle_c,
-                                left_angle,valgus_l,asym_val,
+                                left_angle,valgus_l,varus_l,asym_val,
                                 l_fatigue,l_risk,left_ctr.rep_count)
                 cv2.putText(frame,"SAVED!",(w//2-80,h//2),
                             cv2.FONT_HERSHEY_SIMPLEX,2.5,(0,255,0),4,cv2.LINE_AA)
