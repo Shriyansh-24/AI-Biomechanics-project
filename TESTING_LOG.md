@@ -9,4 +9,5 @@
 004 - Added feature to seperate csv tables and risk screenshots of each run
 005 - Program showing knees caving inwards when actually caving outwards. When knees are caving inwards it is undetected.
       Fix: Fixed the camera mirror by reversing the values
-      
+Add: varus detection — outward knee deviation now flagged alongside valgus
+
