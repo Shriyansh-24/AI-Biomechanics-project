@@ -1,0 +1,20 @@
+# ============================================================
+# Sports Biomechanics Motion Capture — Dependencies
+# Install with: pip install -r requirements.txt
+# Python 3.12 recommended
+# ============================================================
+
+# Computer vision — camera feed and drawing
+opencv-python>=4.8.0
+
+# AI pose detection — BlazePose landmark detection
+mediapipe>=0.10.0
+
+# Numerical computing — vector math and dot product
+numpy>=1.24.0
+
+# Data analysis — reading and processing CSV files
+pandas>=2.0.0
+
+# Visualisation — dashboard and graphs
+matplotlib>=3.7.0
