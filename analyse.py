@@ -5,7 +5,7 @@
 #   1. A printed report in the terminal
 #   2. A visual dashboard saved as a PNG image
 # ============================================================
-
+import os
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -13,18 +13,29 @@ import matplotlib.gridspec as gridspec
 from matplotlib.patches import FancyBboxPatch
 import warnings
 warnings.filterwarnings('ignore')
-
 import glob
 
-# NEW — automatically finds the most recent session CSV
-csv_files = sorted(glob.glob("session_*_data.csv"))
-if not csv_files:
-    print("ERROR: No session data found. Run motion_capture.py first.")
-    exit()
-CSV_FILE = csv_files[-1]   # most recent session
-print(f"[LOADING] Using most recent session: {CSV_FILE}")
-OUTPUT_IMG  = "biomechanics_report.png"
+# Search for any CSV that could be a session file
+csv_files = (
+    sorted(glob.glob("session_*_data.csv")) +   # new timestamped format
+    sorted(glob.glob("injury_prevention_data.csv"))  # old format
+)
 
+if not csv_files:
+    # Last resort — find ANY csv in the folder
+    csv_files = sorted(glob.glob("*.csv"))
+
+if not csv_files:
+    print("ERROR: No CSV data found in this folder.")
+    print(f"Looking in: {os.path.abspath('.')}")
+    print("Make sure you run analyze.py from the same folder as motion_capture.py")
+    exit()
+
+CSV_FILE   = csv_files[-1]
+print(f"[LOADING] Using most recent session: {CSV_FILE}")
+
+# Save dashboard image with same name as the CSV but as a .png
+OUTPUT_IMG = CSV_FILE.replace(".csv", "_dashboard.png")
 # ============================================================
 # SECTION 1: LOAD AND CLEAN DATA
 # ============================================================
