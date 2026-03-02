@@ -1,66 +1,107 @@
-# 🦵 Markerless Sports Biomechanics Motion Capture
-
-> A real-time injury prevention system using computer vision and biomechanical analysis
+# Non-Invasive Biological Movement Phenotyping System
+### Quantifying Human Movement Biomarkers for Injury Risk Assessment
 
 ![Python](https://img.shields.io/badge/Python-3.12-blue)
 ![MediaPipe](https://img.shields.io/badge/MediaPipe-Latest-green)
 ![OpenCV](https://img.shields.io/badge/OpenCV-4.8-orange)
-![Status](https://img.shields.io/badge/Status-Active%20Development-yellow)
+![Status](https://img.shields.io/badge/Status-Active%20Research-yellow)
+![Field](https://img.shields.io/badge/Field-Biotechnology%20%7C%20Biomechanics-purple)
 
 ---
 
-##Project Goal
+## Overview
 
-Traditional sports biomechanics labs cost ₹15–20 lakhs and require reflective markers physically attached to athletes. This system replicates core functionality using only a laptop webcam, making injury-risk analysis accessible for schools, coaches, and rising athletes
+In biotechnology, a **phenotype** is any observable, measurable characteristic of a biological organism. Human movement is a phenotype — and like all phenotypes, it encodes meaningful biological information about neuromuscular health, fatigue state, structural asymmetries, and injury susceptibility.
 
-Built as part of an NSRI School Ambassador research project focused on sports injury prevention through markerless motion capture.
+This system uses computer vision and biomechanical analysis to **non-invasively capture and quantify movement phenotypes** in real time, using only a standard webcam. It generates structured, repeatable biological data that can be used to investigate how movement patterns relate to injury risk — without physical markers, laboratory infrastructure, or clinical intervention.
 
----
-
-## 🔬 What It Detects
-
-| Risk Factor | How Detected | View Required |
-| Knee Valgus (ACL tear risk) - Knee x-deviation from hip-ankle alignment line - Front only |
-| Left-Right Asymmetry - Angle difference between both knees - Front only |
-| Shallow Squat Depth - Knee angle above 130° threshold - Both views |
-| Fatigue-Related Breakdown - Depth reduction across successive reps - Both views |
-| Hyperextension Risk - Knee angle above 175° - Both views |
-
-The system automatically detects whether you are facing the camera (front view) or standing sideways (side view) using shoulder-width estimation, and activates only the relevant checks for that orientation.
+Built as part of an NSRI School Ambassador research project exploring the intersection of **biotechnology, biomechanics, and data science**.
 
 ---
 
-##The Mathematics
+## The Biological Question
 
-Knee angle is calculated using the 3D dot product formula applied to the Hip → Knee → Ankle landmark chain:
-This uses the z-coordinate (depth) estimated by MediaPipe's BlazePose neural network, giving a true 3D angle rather than a flat 2D projection. A fully extended knee reads ~170–175°. A deep squat reads ~70–90°.
+> *Can non-invasive, markerless movement analysis generate clinically meaningful biological data about injury susceptibility — and can that data reveal patterns that traditional observation cannot?*
+
+This project is an attempt to answer that question through:
+
+- Quantitative measurement of knee joint kinematics (3D angle data)
+- Detection of neuromuscular compensation patterns (valgus, varus, asymmetry)
+- Tracking fatigue-related phenotypic changes across repeated movements
+- Generating structured datasets suitable for biological pattern analysis
 
 ---
 
-## 🏗️ How It Works — Layer by Layer
+## Why This Connects to Biotechnology
+
+Traditional injury risk assessment requires either:
+- Expensive laboratory motion capture
+- Invasive biological testing (blood lactate, EMG electrodes)
+- Subjective clinical observation
+
+This system proposes a third approach: **phenotypic screening through computer vision**. Just as high-throughput biological screening identifies at-risk molecular phenotypes, this system identifies at-risk movement phenotypes — quickly, non-invasively, and at scale.
+
+This has direct relevance to:
+
+| Biotechnology Application | Connection to This Project |
+|---|---|
+| Rehabilitation medicine | Objective tracking of recovery phenotypes post-ACL surgery |
+| Genetic risk research | Movement phenotypes correlate with connective tissue gene variants (COL5A1) |
+| Clinical biomarker development | Fatigue score as a proxy for neuromuscular biological state |
+| Population health screening | Scalable injury risk assessment without laboratory infrastructure |
+
+---
+
+## What the System Measures
+
+### Primary Biological Measurements
+
+**Knee Flexion Angle (3D)**
+The interior angle at the knee joint calculated using the dot product of vectors from the hip and ankle. This is the primary kinematic phenotype — it quantifies joint range of motion and squat depth in three dimensions.
 
 ```
-Webcam feed (30fps)
-      ↓
-MediaPipe BlazePose Neural Network
-      → detects 33 body landmarks (x, y, z)
-      ↓
-Orientation Detector
-      → shoulder width → FRONT or SIDE view
-      ↓
-Biomechanics Engine
-      → 3D angle calculation (dot product)
-      → valgus detection (front only)
-      → asymmetry detection (front only)
-      → fatigue detection (rep history)
-      → risk score 0–100
-      ↓
-Output Layer
-      → live annotated video feed
-      → auto CSV data logging
-      → auto screenshot on high risk
-      → plain-English feedback on screen
+θ = arccos( v₁·v₂ / |v₁||v₂| )
 ```
+
+Where v₁ = Hip→Knee vector and v₂ = Ankle→Knee vector, using x, y, z coordinates.
+
+**Knee Valgus (Medial Deviation)**
+Inward collapse of the knee relative to the hip-ankle alignment axis. A quantitative marker for ACL injury risk. The most common mechanism of non-contact ACL rupture in sport.
+
+**Knee Varus (Lateral Deviation)**
+Outward deviation of the knee beyond the hip-ankle axis. Associated with LCL stress, IT band syndrome, and long-term lateral compartment cartilage degradation.
+
+**Left-Right Asymmetry**
+Angular difference between the two knees at the same moment. A marker for neuromuscular imbalance and compensatory loading patterns — a known predictor of overuse injury.
+
+**Fatigue-Related Phenotypic Shift**
+Reduction in squat depth across successive repetitions. Biologically, this reflects neuromuscular fatigue — decreased motor unit recruitment, ATP depletion, and altered movement strategy under metabolic stress.
+
+### Composite Output
+
+**Injury Risk Score (0–100)**
+A weighted composite of all detected risk factors per frame, providing a single quantitative summary of biological movement quality.
+
+| Score | Biological Interpretation |
+|---|---|
+| 0–20 | Low risk — healthy movement phenotype |
+| 20–50 | Moderate risk — compensatory patterns emerging |
+| 50–100 | High risk — clinically significant deviation detected |
+
+---
+
+## Orientation-Aware Detection
+
+The system automatically detects whether the subject is facing the camera (frontal plane view) or standing sideways (sagittal plane view) by measuring the horizontal distance between shoulder landmarks.
+
+This is biologically important because different movement phenotypes are only visible from specific anatomical planes:
+
+| Measurement | Frontal Plane (Front View) | Sagittal Plane (Side View) |
+|---|---|---|
+| Valgus / Varus | ✅ Meaningful | ❌ Geometrically invalid |
+| Left-Right Asymmetry | ✅ Meaningful | ❌ Only one leg visible |
+| Squat Depth (flexion angle) | ✅ Approximate | ✅ Most accurate |
+| Fatigue Detection | ✅ Both views | ✅ Both views |
 
 ---
 
@@ -77,15 +118,13 @@ cd AI-Biomechanics-project
 pip install -r requirements.txt
 ```
 
-### 3. Download the AI model file
-Download `pose_landmarker_heavy.task` from the link below and place it in the project folder:
+### 3. Download the AI model
+Download `pose_landmarker_heavy.task` and place it in the project folder:
 ```
 https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_heavy/float16/latest/pose_landmarker_heavy.task
 ```
 
-> The model file is ~25MB and is not included in this repository.
-
-### 4. Run the main program
+### 4. Run live capture
 ```bash
 python motion_capture.py
 ```
@@ -97,88 +136,108 @@ python analyze.py
 
 ---
 
-## Controls
+## Output Data
 
-| Key | Action |
+Every session automatically generates:
+
+**Structured CSV dataset** — frame-by-frame biological measurements:
+
+| Column | Biological Meaning |
 |---|---|
-| `S` | Start 5-second countdown then save current frame to CSV |
-| `Q` | Quit and generate session summary |
-| Auto | High-risk positions (score ≥ 40) are screenshot automatically |
+| `knee_angle_deg` | Primary kinematic phenotype — joint flexion angle |
+| `knee_valgus` | Medial deviation marker — ACL stress indicator |
+| `knee_varus` | Lateral deviation marker — LCL/IT band stress indicator |
+| `asymmetry_deg` | Neuromuscular imbalance quantification |
+| `fatigue_detected` | Phenotypic fatigue state — proxy for neuromuscular exhaustion |
+| `risk_score_0_to_100` | Composite injury susceptibility score |
+
+**Annotated risk screenshots** — images of every high-risk movement moment with plain-English biological explanation of what is wrong and how to correct it.
+
+**Session analysis dashboard** — visual summary of all phenotypic measurements across the session.
 
 ---
 
-## 📁 Output Files
+## Research Limitations
 
-| File/Folder | Contents |
-|---|---|
-| `injury_prevention_data.csv` | Frame-by-frame joint coordinates, angles, risk scores |
-| `risk_screenshots/` | Annotated JPEG images of every high-risk position |
-| `risk_screenshots/risk_report.txt` | Plain-English explanation of each flagged moment | ** This is a beta feature, and needs more work as it is not fully accurate and cannot be trusted fully yet
-| `biomechanics_report.png` | Visual dashboard generated by analyze.py |
+Documenting limitations is a core part of scientific rigour:
+
+| Limitation | Biological Impact | Notes |
+|---|---|---|
+| Single monocular camera | z-depth estimated, not measured | Multi-camera setup would improve 3D accuracy |
+| No ground truth validation | Cannot confirm against lab-grade system | Key limitation for formal publication |
+| Fixed thresholds | May not generalise across body types | Taller subjects may require threshold adjustment |
+| No direct biological markers | Cannot measure lactate, EMG, or hormonal fatigue markers | Future work: correlate with wearable biosensors |
+| 2D valgus proxy | True valgus requires 3D measurement | Single camera provides frontal plane approximation only |
 
 ---
 
-## 📂 Project Structure
+## Future Directions
+
+- [ ] Correlation with heart rate / HRV as biological fatigue proxy
+- [ ] Hip flexion angle — forward trunk lean as a spinal load marker
+- [ ] Ankle dorsiflexion — mobility phenotype linked to injury risk
+- [ ] Longitudinal tracking — phenotypic changes across weeks of training
+- [ ] Multi-subject dataset — population-level movement phenotype analysis
+- [ ] Integration with wearable biosensors for multi-modal biological data
+
+---
+
+## Project Structure
 
 ```
-├── motion_capture.py          # Main program — live capture + risk detection
-├── analyze.py                 # Post-session dashboard and insight generator
+├── motion_capture.py          # Live capture, phenotype detection, risk scoring
+├── analyze.py                 # Post-session dashboard and statistical summary
 ├── requirements.txt           # Python dependencies
-├── .gitignore                 # Excludes data files and model from git
 ├── docs/
-│   ├── TESTING_LOG.md         # Every bug, test case, and fix — documented
-│   └── RESEARCH_NOTES.md      # Biomechanics context and references
+│   ├── TESTING_LOG.md         # Documented bugs, root causes, and fixes
+│   └── RESEARCH_NOTES.md      # Biological context and scientific references
 └── sample_data/
-    └── sample_output.csv      # Example session output for reference
+    └── sample_output.csv      # Example session dataset
 ```
 
 ---
 
-## 🗺️ Roadmap
+## Interdisciplinary Framework
 
-- [x] Real-time knee angle calculation (3D dot product)
-- [x] Knee valgus detection
-- [x] Left-right asymmetry detection
-- [x] Automatic rep counting
-- [x] Fatigue detection across reps
-- [x] Auto-screenshot on high risk positions
-- [x] Orientation-aware detection (front vs side view)
-- [x] Post-session analysis dashboard
-- [ ] Hip flexion angle (forward lean analysis)
-- [ ] Ankle dorsiflexion measurement
-- [ ] Running gait analysis
-- [ ] Multi-sport support (jump landing, sprint mechanics)
-- [ ] Automatic PDF report generation
-- [ ] Session-to-session progress tracking
+This project sits at the intersection of four disciplines:
 
----
-
-## 🔗 Interdisciplinary Connections
-
-| Discipline | Role in This Project |
-
-| **Biology** | Defines which joints matter, what angles indicate injury risk, and how fatigue affects movement |
-| **Mathematics** | Vector calculus and dot products compute precise 3D angles from raw landmark coordinates |
-| **Artificial Intelligence** | BlazePose (trained on millions of human images) detects 33 landmarks per frame in real time |
-| **Computer Science** | Ties everything into a real-time data pipeline with visualization and export |
+```
+        BIOLOGY
+    (what to measure —
+    injury mechanisms,          MATHEMATICS
+    phenotype definition)    (how to measure —
+            \                dot product, vector
+             \               calculus, statistics)
+              \             /
+               \           /
+            THIS PROJECT
+               /           \
+              /             \
+    ARTIFICIAL INTELLIGENCE   COMPUTER SCIENCE
+    (how to see —             (how to pipeline —
+    BlazePose neural          real-time processing,
+    network, landmark         data export, state
+    detection)                management)
+```
 
 ---
 
-## 📚 References
+## Scientific References
 
-- Abebe, A. et al. — MediaPipe BlazePose: https://arxiv.org/abs/2006.10204
-- ACL injury biomechanics — Hewett et al., *American Journal of Sports Medicine*, 2005
-- Valgus collapse and injury risk — Powers, C.M., *Journal of Orthopaedic & Sports Physical Therapy*, 2010
+- Hewett, T.E. et al. (2005). Biomechanical measures of neuromuscular control and valgus loading predict ACL injury risk. *American Journal of Sports Medicine*, 33(4), 492–501.
+- Powers, C.M. (2010). The influence of abnormal hip mechanics on knee injury. *Journal of Orthopaedic & Sports Physical Therapy*, 40(2), 42–51.
+- Bazrgari, B. et al. — MediaPipe BlazePose: https://arxiv.org/abs/2006.10204
+- September, A.V. et al. (2009). Variants within the COL5A1 gene and ACL ruptures. *British Journal of Sports Medicine*, 43(15), 1222–1228.
 
 ---
 
-## 👤 Author
+## Author
 
 **Shriyansh** — Grade 12 PCB, NSRI School Ambassador
-Built for sports biomechanics research — 2025/26
+*Research focus: Non-invasive biological monitoring at the intersection of computer vision and phenotypic data science*
 
 ---
 
-## 📄 License
+## License
 
 MIT License — free to use and build upon with attribution.
