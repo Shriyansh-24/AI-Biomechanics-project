@@ -9,6 +9,9 @@
 
 ---
 
+What This Program Actually Does
+You open your laptop, run motion_capture.py, and stand in front of your webcam. The program opens a live camera window showing your body with a skeleton drawn over it. As you perform squats, it calculates the exact angle of your knee joint in real time using 3D mathematics and displays that number on screen next to your knee. It watches for dangerous movement patterns — such as your knee collapsing inward, your two legs moving unevenly, or your form breaking down as you tire — and displays colour-coded warnings on screen the moment it detects them. Whenever the overall injury risk crosses a threshold, it silently saves an annotated photograph of that exact moment to a folder on your computer, with a plain-English caption explaining what went wrong and how to fix it. Every session also generates a CSV file of frame-by-frame joint data and a visual dashboard summarising your movement quality across the session. The system automatically detects whether you are facing the camera or standing sideways and adjusts which checks it runs accordingly — for example, it only checks for inward knee collapse when you are facing the camera, where that measurement is geometrically meaningful. No markers, no wires, no lab equipment — just a webcam and Python.
+
 ## Overview
 
 In biotechnology, a **phenotype** is any observable, measurable characteristic of a biological organism. Human movement is a phenotype — and like all phenotypes, it encodes meaningful biological information about neuromuscular health, fatigue state, structural asymmetries, and injury susceptibility.
